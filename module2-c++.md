@@ -1,4 +1,4 @@
-behavior# Module 2: c++
+# Module 2: c++
 
 ```c
 // Hello world in c
@@ -310,7 +310,7 @@ void inc(int n) {
   * pass-by-value: `inc` gets a copy of `x`, then increments the copy, while the original is unchanged
   * If a function needs to modify a parameter, **pass a pointer**
 
-```
+```cpp
 void inc(int *n) { *n = *n + 1 }
 
 ...
@@ -325,9 +325,9 @@ count << x;
 Q: *Why do we say `cin >> x` and not `cin >> (&x)`?*
 A: c++ has another ptr-like type: **references** (⭐ important ⭐)
 
-#### REFERENCES
+## REFERENCES
 
-```
+```cpp
 int y = 10;
 int &z = y; // Called an lvalue reference to int (to y)
 ```
@@ -389,7 +389,7 @@ int h(const ReallyBig &rb) {...} // FAST, NO COPY, PARAMETER CAN NOT CHANGE
   * *Advice*: prefer pass-by-const-ref over pass-by-value for anything larger than a pointer, *unless* the function needs to make a copy anyways (in that case, use pass-by-value)
 
 Suppose:
-```
+```cpp
 int f(int &n) { ... }
 int g(const int &n) { ... }
 f(5); // you can't do this, because 5 doesn't have an address ❌
@@ -417,7 +417,7 @@ e.g. `Node *np = new Node; ... delete np;`
 |Node|np|
 
 e.g.
-```
+```cpp
 Node getMeANode() {
   Node n;
   return n;
@@ -426,17 +426,17 @@ Node getMeANode() {
   * this is potentially very expensive - n is copied to the caller's stack frame on return
   * should be return a reference/ptr instead?
 
-```
+```cpp
 ❌ ❌ ❌
 Node & getMeANode() {
   Node n;
   return n;
 }
 ```
-  * ❌ this is one of the worst things you could ever do
+  * ❌ "this is one of the worst things you could ever do" - Brad Lushman
   * you're pointing at something in an old frame, the frame that the var is in will be overwritten!!
 
-```
+```cpp
 Node *getMeANode() {
   return new Node;
 }
@@ -447,7 +447,7 @@ Node *getMeANode() {
 #### Operator Overloading
 Give meanings to c++ operators or new types!
 e.g.
-```
+```cpp
 struct Vec {
   int x, y;
 };
@@ -470,7 +470,7 @@ v = w + x;
 ```
 
 ***Overloading << and >>***
-```
+```cpp
 // Example
 struct Grade {
   int theGrade;
@@ -496,7 +496,7 @@ istream &operator>>(istream &in, Grade &g) {
   * `#define VAR VALUE` sets a preprocessor variable
     - then all occurrences of `VAR` in src file are replaced with `VALUE`
 
-```
+```cpp
 // OBSOLETE ❌
 #define MAX 10
 int x[MAX]; // transformed by the preprocessor to int x[10];
@@ -511,7 +511,7 @@ for(ever) {
   * nowadays you would use const definitions instead
   * but, defined constants are useful for conditional compilations
 
-```
+```cpp
 // Controlling what code the compiler is seeing
 #if SECURITYLEVEL == 1
   short int
@@ -520,7 +520,7 @@ for(ever) {
 #endif
   publickey;
 ```
-```
+```cpp
 // SPECIAL CASE - heavy duty commenting out
 #if 0 // will never be true
   ...
@@ -529,25 +529,25 @@ for(ever) {
   * heavy duty commenting out is better because `/* */` doesn't nest, can't comment within comments
 
 Can also define symbols via compile args:
-```
+```cpp
 int main () {
   cout << X << endl;
 }
 ```
 and then run with
-```
+```bash
 g++14 -DX=15 test.cc -o define // Tells the processor to define X as 15
 ```
 
 another case:
-```
+```cpp
 // true if name has/has not been defined
 
 #ifdef NAME
 #ifndef NAME
 ```
 
-```
+```cpp
 int main() {
   #ifdef DEBUG
     cout << "setting x = 1" << endl;
@@ -563,7 +563,7 @@ int main() {
 }
 ```
 
-#### Separate Compilation
+## Separate Compilation
 Split programs into composable modules which each provide:
   * interface
     - type definitions, function headers, `.h` file
@@ -574,7 +574,7 @@ Recall: *declaration vs definition*
   * declaration asserts **existence**
   * definition gives the "full details" and also allocates space (in the case of variables and fn's)
 
-```
+```cpp
 // INTERFACE (vec.h)
 struct Vec { // DEFINE the structure
   int x, y;
@@ -642,10 +642,11 @@ Thus, we need to prevent files from being included more than once
 ***NEVER EVER*** put `using namespace std` in headers - it forces the client to open the namespace, should be the client's choice not the library's choice
 ***ALWAYS*** use `std::` prefix in headers
 
+*********
 # missed lecture on classes
-
+*********
 Consider:
-```
+```cpp
 Node *n = new Node{1, new Node{2, new Node{3, nullptr}}}
 Node m = *n
 Node *p = new Node{*n}
@@ -655,7 +656,7 @@ Node *p = new Node{*n}
   * pointer p is on the stack, points to ***a copy of the first node*** (its a shallow copy)
   * if you want a *deep* copy, i.e. copies the whole list, then you must write your own copy constructor:
 
-```
+```cpp
 struct Node {
   Node (const Node &other): data { other.data }, // must pass other by ref, by value would call the copy constructor again and be infinite recursion
     next { other.next ? new Node { *other.next } : nullptr } // we use *other.next because other.next is not a node, its a ptr
@@ -697,34 +698,28 @@ Node n = 4; // NOT OK!
 f(4); // NOT OK!
 ```
 
-```
-|   |   \    /  /-----
-|  /   | \  / | |
-| \    |  \/  | \----\
-|   \  |      | _____|   
-```
-
 # Destructors
 When an object is destroyed:
   * stack allocated: goes out of scope
   * heap allocated: is destroyed
 
-A method calls the *desructor* runs
+A method calls the *destructor* runs
   1. destructor body runs
-  2. fields' destructors (if they are objects) are called in reverse declaration order
+  2. fields' destructors (if they are objects) are called *in reverse declaration order*
   3. space is deallocated
 
 As before, classes come with a destructor (just calls destructors for all fields that are objects)
-When do we need to write a desctructor???
+When do we need to write a destructor???
   * i.e. llists. if the pointer goes out of scope all the stuff on the heap is LEAKED (but the pointer isn't)
-```
+
+```cpp
 struct Node {
   ~Node() { delete next; } // deletes next, recursively calls *next destructor therefore the whole list is deallocated
 }
 
 ```
 
-# Copy Assignment Operator
+## Copy Assignment Operator
 ```cpp
 Student bill { 60, 70, 80 }
 Student jane = billy; // copy constructor
@@ -732,7 +727,7 @@ Student joey; // Default constructor 0, 0, 0
 joey = bill; // Copy, but not a constructor - uses copy assignment operator (default one is SHALLOW)
 ```
 May need to write our own:
-```
+```cpp
 ❌❌
 struct Node {
   Node &operator = (const Node &other) {
@@ -743,7 +738,7 @@ struct Node {
 }
 ```
 WHY IS THIS BAD?
-```
+```cpp
 Node n {1, newNode{2, newNode{3, nullptr}}}
 n = n // deletes n, then tries to copy n to n, undefined behaviour
 
@@ -751,7 +746,7 @@ n = n // deletes n, then tries to copy n to n, undefined behaviour
 a[i] = a[j];
 ```
 
-```
+```cpp
 struct Node {
   Node &operator (const Node &other) {
     data = other.data;
@@ -858,7 +853,7 @@ struct Vec {
 
 ## Separate Compilation For Classes
 
-```
+```cpp
 // Node.h
 #ifndef NODE_H
 #define NODE_H
@@ -870,9 +865,9 @@ struct Node {
 }
 ```
 
-```
+```cpp
 // Node.cc
-#include "Node,h"
+#include "Node.h"
   Node::Node (int data, Node *next): data{data}, next{next}{}
   bool Node::isSingleton() { return next == nullptr }
 ```
@@ -881,7 +876,7 @@ struct Node {
 
 ## Const objects
 
-```
+```cpp
 int f(const Node &n) { ... }
 ```
 * const objects arise often, especially as Params
@@ -1112,7 +1107,7 @@ public:
 ***The difference between `class` and `struct` is default visibility: public in struct, private in class***
 
 # Mandatory CS Tutorial
-```
+```bash
 makefile v2
           CXX=g++
           CXXFLAGS=-std=c++14 -Wall -g -Werror
