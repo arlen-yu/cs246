@@ -642,9 +642,220 @@ Thus, we need to prevent files from being included more than once
 ***NEVER EVER*** put `using namespace std` in headers - it forces the client to open the namespace, should be the client's choice not the library's choice
 ***ALWAYS*** use `std::` prefix in headers
 
-*********
-# missed lecture on classes
-*********
+
+# Classes
+
+Recall:
+``` c++
+Node *np = new Node,
+...
+delete np;
+```
+
+**Arrays**:
+``` c++
+int *p = new int [40];
+...
+delete [] p; // The form of delete must match the form of new
+```
+
+### Classes
+* Can put function inside of structs
+
+Example:
+``` c++
+struct Student {
+  int assns, mt, final;
+  float grade(){
+    return assns * 0.4 + mt * 0.2 + final * 0.4;
+  }
+};
+
+Student s{60, 70, 80};
+cout << s.grade() << endl;
+```
+
+**Class**:
+ * A structure type that can contain functions.
+ * C++ has a *class* keyword - we will use it later.
+
+**Object**:
+ * An instance of a class
+
+**Member Function**:
+ * Also known as a method
+ * Is the function contained in the class (like grade() in Student)
+
+What do assns, mt, final mean inside of `grade(){...}`?
+ * They are fields of the current object: the object upon which the method was called.
+ ``` c++
+ Student billy {...};
+ billy.grade();   // Uses Billy's assns, mt, final
+ ```
+ * **Formally**: Methods take a hidden extra parameter called *this* - A pointer to the object upon which the method was called.
+ ``` c++
+ billy.grade();       // this == &billy in the function.
+ ```
+  * We can write:
+  ``` c++
+  struct Student{
+    int assns, mt, final;
+    float grade(){
+      return this->assns * 0.4 + this->mt * 0.2 + this->final * 0.4;
+    }
+  };
+  ```
+
+### Initializing Objects
+* `Student billy{60, 70, 80};` is okay, but limited
+* Better: A method that does initialization: a **constructor**.
+  ``` c++
+  Struct Student {
+    int assns, mt, final;
+    Student (int assns, int mt, int final){
+      this->assns = assns;
+      this->mt = mt;
+      this->final = final;
+    }
+  };
+
+  Student billy {60, 70, 80};
+  ```
+  * If a constructor has been defined, these arguments are passed to the constructor
+  * If no constructor has been defined, then these arguments initialize the individual fields of Student
+
+##### Initializing variables:
+  * `int x=5; // Works`
+  * `int x(5); // Works`
+  * `string s = "hello"; // Works`
+  * `string s("hello"); // Works`
+  * `ifstream f = "hello.txt"; // DOESN"T WORK`
+  * `ifstream f("hello.txt"); // Works`
+
+In 2010:
+ * `Student billy(60, 70, 80); // Constructor call`
+ * `Student billy {60, 70, 80}; // C-style direct initialization`
+ * `int a[5] = {1, 2, 3, 4, 5};`
+
+From 2011:
+ * `{}` is set to the default initialization method.
+  * `int x{5}; // Works`
+  * `string s{"hello"}; // Works`
+  * `ifstream f{"hello.txt"}; // Works`
+
+##### Advantages of Constructors:
+ * Default parameters, overloading, sanity checks
+ ``` c++
+ struct Student{
+   Student (int assns = 0, int mt = 0, int final = 0){
+     this->assns = assns;
+     this->mt = mt;
+     this->final = final;
+   }
+ };
+
+ Student jane{70, 80};  // 70, 80, 8
+ Student newKid;        // 0, 0, 0
+ ```
+ * **Note**: Every class comes with a built-in default constructor (i.e. takes no args).
+  * This just default constructs all fields that are objects.
+  * For non-objects, the default constructor does nothing.
+   ``` c++
+   Vec V; // Does nothing
+   ```
+  * The built in constructor goes away if you provide any constructor.
+   ``` c++
+   struct Vec {
+     int x, y;
+     Vec (int x, int y){
+       this->x = x;
+       this->y = y;
+     }
+   };
+   Vec v;       // Error! no default constructor.
+   Vec v{1, 2}; // Works
+   ```
+ * What if struct contains constants or references?
+   ``` c++
+   struct MyStruct {
+     const int myConst;     // Must be Initialized
+     int &myRef;            // Must be Initialized
+   };
+   ```
+  * So initialize it:
+    ``` c++
+    int z;
+    struct MyStruct {
+      const int myConst = 5;     // Must be Initialized
+      int &myRef = z;            // Must be Initialized
+    };
+    ```
+ * But does every instance of MyStruct need to have the same value of MyConst?
+   ``` c++
+   Struct Student {
+     const int id;  // constant (i.e. doesn't change), but not the same for every student
+   };
+   ```
+ * Then where do we initialize?
+  * Constructor Body - Too late as fields must be fully constructed by then.
+ * When an object is created:
+  1. Space is allocated
+  2. Fields are constructed in declaration order
+  3. Constructor body runs
+
+##### Member Initialization List (MIL):
+```c++
+struct Student{
+ const int id;
+ int assns, mt, final;
+ Student (int id, int assns, int mt, int final):
+  id{id}, assns{assns}, mt{mt}, final{final} {}
+ // The outer id, assns, etc. have to be fields by the rules so it doesn't use the internal scope
+ // The inner id, etc. is the parameter from the internal scope.
+ // We may initialize any field this way. Not just Consts and Refs
+};
+```
+
+**Example**: Not using the MIL
+``` c++
+struct Student{
+  string name;
+  Student(string name){
+    this->name = name;
+  }
+};
+```
+ * String is default constructed to `""` in step 2. it is then assigned the value in step 3.
+ * Using the MIL makes the initialization only occur once (step 2 it is assigned the parameter value).
+
+**Note**: Fields are initialized in *the order in which they are declared in class*. Even if the MIL orders them differently.
+
+**Embrace the MIL!**
+ * What if a field is defined inline AND in the MIL?
+   ``` c++
+   struct Vec {
+     int x = 0, y = 0;    // Only happens if the field is not mentioned in the MIL
+     Vec (int x): x{x} {}
+   }
+   ```
+  * The MIL takes precedence.
+
+**Example**: Now consider this
+``` c++
+Student billy {60, 70, 80};
+Student bobby = billy;      // How does this initialize?
+```
+ * The **Copy Constructor** is used for constructing on e object as a copy of another.
+
+**Note**: Every class comes with:
+ 1. Default constructor (default constructs all objects)
+  * Lost if you write any constructors
+ 2. Copy constructor (just copies all fields)
+ 3. Copy assignment operator
+ 4. Destructor
+ 5. Move constructor
+ 6. Move assignment operator
+
 Consider:
 ```cpp
 Node *n = new Node{1, new Node{2, new Node{3, nullptr}}}
