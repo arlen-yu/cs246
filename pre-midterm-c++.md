@@ -1317,6 +1317,8 @@ public:
 
 ***The difference between `class` and `struct` is default visibility: public in struct, private in class***
 
+********
+
 # Mandatory CS Tutorial
 ```bash
 makefile v2
@@ -1352,3 +1354,32 @@ Lvalues
 Rvalues
   * temps
   * can only be on the RIGHT of expressions
+
+********
+# missed lect on iterator pattern. see [dzed](http://dzed.me/notes/2016/05/02/Cs-246.html)
+********
+
+*Recall*: accessors + mutators
+```cpp
+class Vec {
+  int x, y;
+public:
+  int getX() const { return x } // accessor
+  void setT(int x) { y = x; } // mutator
+}
+```
+
+What about `<<`?
+  * needs x + y, but can't be a member
+  * if getX, getY defined, then you're ok.
+
+```cpp
+class Vec {
+  ...
+  friend ostream &operator<<(ostream &out, const vec &v);
+};
+
+ostream &operator<<(ostream &out, const vec &v) {
+  return out << v.x << ' ' << v.y;
+}
+```
