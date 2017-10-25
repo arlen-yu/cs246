@@ -1283,8 +1283,6 @@ Right now, can't enforce any invariants - the user can interfere with our data.
     * but not if the client can rearrange the underlying data~!
     * i.e. it is very hard to reason about programs without invariants ⭐
 
-### Enforcing invariants: encapsulation!
-
 We want to treat our objects as black boxes - capsules.
 
 * implies details sealed away
@@ -1315,9 +1313,156 @@ public:
 }`
 ```
 
+
 ***The difference between `class` and `struct` is default visibility: public in struct, private in class***
 
-********
+### Enforcing invariants: encapsulation!
+* create a wrapper class for the Nodes of a linked list
+
+```cpp
+// list.h
+class List {
+  struct Node; // private nested class
+  Node \*theList = nullptr;
+public:
+  void addToFront(int n);
+  int ith(int i);
+  ~List();
+};
+
+// list.cc
+struct List::Node {
+  int data;
+  Node \*next;
+  Node(int data, Node * next): ....
+  ~Node() { delete next; }
+};
+
+List::~List(){ delete theList; }
+List::addToFront(int n) { theList = new Node(n, theList); }
+int List::ith(int i) {
+  Node * curr = theList;
+  for (int j = 0; j < i && curr; curr = curr->next, ++j);
+  return curr->data;
+}
+```
+
+* using encapsulation, we have garenteed the node invariant
+  * what is the cost? (how do we traverse/iterate the list?)
+  * what is the efficiency of printing the list?
+    * now O(n^2) instead of O(n)
+      - as the ith function is O(n) and needed n times to O(n^2)
+  * how do we provide O(n) traversal while still using encapsulation?
+
+## Design Patterns
+
+Previously identified programming scenarios with previously developed good solutions
+
+#### Iterator Design Pattern:
+* create another iterator class that acts as an abstraction of a ptr into the list
+
+```cpp
+// array is an int array
+for (int * p = array; p != array + arraySize; ++p) {
+  ....* p ....
+}
+```
+
+#### LIST ITERATOR
+```cpp
+class List {
+  struct Node;
+  Node * theList = nullptr;
+public:
+  class Iterator {
+    Node * curr;
+  public:
+    Iterator(Node * curr): curr(curr) {}
+    int &operator*() { return curr->data; }
+    Iterator &operator++() {
+      curr = curr->next;
+      return * this;
+    }
+    bool operator==(const Iterator &other) const {
+      return cur == other.curr;
+    }
+    bool operator!=(const Iterator &other) const {
+      return !(* this == other);
+    }
+  }; // done iterator class
+  Iterator begin() {
+    return Iterator(theList);
+  }
+  Iterator end() {
+    return Iterator(nullptr);
+  }
+};
+
+for (List::Iterator i = list.begin(); i != list.end(); ++i) {
+  cout << * i << endl;
+}
+```
+
+## Using C++11 automatic type deduction
+
+`auto x = y; // defines x to be the same type as y`
+`auto i = l.begin();`
+
+## Range-based for loops
+* build in support for iterator pattern
+
+```cpp
+for (auto n: l) {
+  cout << n << endl;
+}
+
+// IS IDENTICAL TO
+
+for (List::iterator i = l.begin(); i != l.end(); ++i) {
+  cout << * i << endl;
+}
+```
+
+## For pass by reference
+```cpp
+for (auto &n: l) {
+  ++n;
+}
+```
+
+* range based for loops can only be used if:
+  * class has begin and end operators that return the same iterator object
+  * the iterator class must be implemented with:
+    * !=
+    * prefix ++
+    * unary *
+
+## Topic: Friendship
+Motivation: iterator class is public, but we would like it to be private
+
+But if we made it private, begin & end wouldn't be able to call Iterator() either
+
+Solution:
+* We make iterator constructor private
+* but iterator class says list is my friend
+  * friend has access to all the private parts
+  * don't make too many friends!!
+
+```cpp
+class List {
+  struct Node;
+  ...
+public:
+  class Iterator {
+    Iterator(Node * curr) {..}
+  public:
+    .
+    .
+    friend class List; // now list is a friend
+  }
+};
+```
+
 
 # Mandatory CS Tutorial
 ```bash
@@ -1357,6 +1502,7 @@ Rvalues
 
 ********
 # missed lect on iterator pattern. see [dzed](http://dzed.me/notes/2016/05/02/Cs-246.html)
+
 ********
 
 *Recall*: accessors + mutators
