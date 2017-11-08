@@ -33,10 +33,6 @@ rm "$errfile"
 
 * why put quotes? because if there are space in filenames, it will treat as one argument with quotes
 
-# streams
-
-# stack and heap
-
 # the big five
 
 *Steps for object creation*

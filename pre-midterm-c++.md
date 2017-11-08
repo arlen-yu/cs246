@@ -1529,3 +1529,12 @@ ostream &operator<<(ostream &out, const vec &v) {
   return out << v.x << ' ' << v.y;
 }
 ```
+
+
+```cpp
+Node(const Node &other): data(other.data), next(other.next ? new Node(*other.next) : nullptr) {}
+Node(const Node &&other): data(other.data), next(other.next) {
+  other.next = nullptr;
+}
+
+```
