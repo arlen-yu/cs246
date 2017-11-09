@@ -1,5 +1,3 @@
-****
-
 # Static fields and methods
 
 What if we want to track the number of times a method is ever called or the number of students created?
@@ -709,3 +707,181 @@ Can be many different kinds of observe objects - subject should not need to know
 2. subject::notifyObservers() called (either by the subject itself or by an external controller)
   * calls each observer's notify
 3. each observer calls ConcreteSubject::getState to get the new state + reacts appropriately
+
+******
+
+##### Example: horse race
+* Subject - publishes winners
+* Observers - individual betters
+  - declare victory when their horse wins
+
+```javascript
+class Subject {
+  vector <Observer*> observers;
+public:
+  void attach(Observer * ob) {
+    observers.emplace_back(ob);
+  }
+  void detach(Observer * ob) {
+    // remove it from the vector
+  }
+  void notifyObservers() {
+    for (auto &ob: observers) ab->notify();
+  }
+  virtual ~Subject() = 0;// still have to implement it!
+};
+
+// somewhere in cc....
+Subject::~Subject() {}
+// ...................
+
+class Observer {
+public:
+  virtual void notify() = 0;
+  virtual ~Observer();
+};
+
+class HorseRace:public Subject {
+  ifstream in; // source of winners
+  string lastwinner;
+public:
+  HorseRace(string source): in(source) {}
+  bool runRace() {
+    return in >> lastwinner ? true : false; // true means there was a race, false means out of races
+  }
+  string getState() {
+    return lastwinner;
+  }
+};
+
+class Bettor:public Observer {
+  HorseRace * subject;
+  string name, myHorse;
+public:
+  Bettor(  ): ..... {
+    subject->attach(this);
+  }
+  ~Bettor() {
+    subject->detach(this);
+  }
+  void notify() {
+    string winner = subject->getState();
+    if (winner == myHose) {
+      cout << "win!" << endl;
+    } else {
+      cout << "lose :(" << endl;
+    }
+  }
+};
+
+// main.cc
+int main() {
+  HorseRace hr{"file.txt"};
+  Bettor Larry{&hr, "Larry", "RunsLikeACow"};
+  ... // other bettors
+
+  while (hr.runRace()) {
+    hr.notifyObservers();
+  }
+}
+```
+
+## Decorator Pattern
+
+Want to enhance an object at runtime - add functionality/features
+
+##### e.g. windowing system
+  * start with a basic window
+  * add scrollbar
+Want to choose these enhancements at runtime
+
+```
+            | Component  | window interface
+            | +operator  |
+      /                         \
+  | ConcreteComponent |       | Decorator|
+  | +operation        |             ^
+                                    |
+                              ---------------
+                              |             |
+            | ConcreteDecorator A |     | ConcreteDecorator B |
+            | +operation          |     | +operation          |
+
+```
+
+* Class Component
+  * defines the interface
+  * the operations your objects will provide
+* ConcreateComponent
+  * implements the interface
+* Decorators
+  * all inherit from decorator, which inherits from component
+  * therefore every decorator is a component, and every decorator has a component
+
+##### Eg window w/ scrollbar
+  * this is a kind of window, AND it *has* a pointer to the underlying plain window
+  * window w/ scrollbar AND menu is a window, and HAS ptr to window w/scrollbar, which has a pointer to the plain window
+
+***All inherit from abstract window, so window methods can be used polymorphically on all of them***
+
+##### E.g. PIZZA
+```
+                | PIZZA |<------------
+                /       \            |
+| CRUST AND SAUCE |     | DECORATOR |o
+                              ^
+                              |
+                  --------------------------
+                  |           |            |
+    | Stuffed Crust |   | Topping |     | Dipping Sauce |
+
+```
+
+```cpp
+class Pizza {
+public:
+  virtual float price() const = 0;
+  virtual string desc() const = 0;
+  virtual ~Pizza();
+};
+
+class CrustAndSauce:public Pizza {
+public:
+  float price() const override { return 5.99; }
+  string desc() const { return "Pizza"}
+};
+
+class Decorator:public Pizza {
+protected:
+  pizza * component;
+public:
+  Decorator(Pizza * p): component(p) {}
+  ~Decorator() { delete component; }
+};
+
+class StuffedCrust:public Decorator {
+public:
+  StuffedCrust(Pizza * p): Decorator(p) {}
+  float price() const override { return component->price() + 2.69; }
+  string desc() const override { return component->desc() + " with stuffed crust"; }
+};
+
+class Topping:public Decorator {
+  string theTopping;
+public:
+  Topping(string topping, Pizza * p): Decorator(p), topping(topping) {}
+  float price() const override { return component->price() + 0.75; }
+  string desc() const override { return component_>desc() + " with " + theTopping; }
+};
+```
+```cpp
+// USE
+
+Pizza * p1 = new CrustAndSauce;
+p1 = new Topping("Cheese", p1);
+p1 = new Topping("Mushrooms", p1);
+p1 = new StuffedCrust(p1);
+
+cout << p1.desc() << ' ' << p1.price();
+delete p1;
+```
