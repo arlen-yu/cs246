@@ -1,3 +1,4 @@
+
 # Static fields and methods
 
 What if we want to track the number of times a method is ever called or the number of students created?
@@ -885,3 +886,361 @@ p1 = new StuffedCrust(p1);
 cout << p1.desc() << ' ' << p1.price();
 delete p1;
 ```
+
+## Factory Method Pattern (aka virtual constructor pattern)
+
+##### Write a video game with 2 kinds of enemies: turtle's and bullets.
+  * system randomly sends turtles and bullets, but bullets become more frequent in harder levels
+
+```
+          | Enemy |
+      /             \
+| Turtle |         | Bullet |
+
+
+        | Level |
+      /           \
+| Easy |         | Hard |
+
+```
+
+* never know which enemy comes next, so can't call turtle/bullet constructors directly
+* instead, put a factory method inside level that creates enemies
+
+```cpp
+class Level {
+public:
+  virtual Enemy * createEnemy() = 0; // factory method
+};
+```
+
+*********
+
+## Template Method Pattern
+
+* Want subclasses to override superclass behavior, but some aspects must stay the same
+
+e.g. there are red turtles and green turtles
+
+```cpp
+class Turtle {
+public:
+  void draw() {
+    drawHand();
+    drawShell();
+    drawFeet();
+  }
+private:
+  void drawHead() { ... }
+  void drawFeet() { ... }
+  virtual void drawShell() = 0;
+};
+
+class RedTurtle:public Turtle {
+  void drawShell() override { draw red shell }
+}
+
+class GreenTurtle:public Turtle {
+  void drawShell() override { draw green shell }
+}
+```
+
+Subclasses can't change the way a turtle is drawn (head, shell, feet) but can change the way the shell is drawn.
+
+##### Generalization - the non-virtual intervace (NVI) idiom
+
+* a public virtual method is really two things:
+  1. public: interface to the client - indicates provided behavior with pre/post conditions
+  2. virtual - interface to the subclasses - hook to insert specialized behavior
+* hard to separate these ideas if they are tied to the same function
+* what if you want to split a virtual method into two without affecting the client interface
+* how can you make overriding functions respect pre/post conditions
+
+#### NVI idiom
+  * all public methods should be non-virtual
+  * all virtual methods should be non-public (private or protected)
+    * except the destructor ⭐
+
+```cpp
+class DigitalMedia {
+public:
+  virtual void play() = 0;
+}
+
+class DigitalMedia {
+public:
+  void play() { doPlay(); } // can add before code e.g. check copyright
+                            // can add after code e.g. update play count
+private:
+  virtual void doPlay() = 0;
+}
+```
+Generalize Template Method:
+  * puts ***every*** void method inside a template method
+
+******
+
+### (ASIDE) STL map - for creating dictionaries
+
+##### e.g. "arrays" that map strings to int
+```cpp
+#include <map>
+using namespace std;
+map<string, int> m;
+m["abc"] = 1;
+m["def"] = 4;
+cout << m["hgi"]; // you get 0 back
+                  // if the key is not present, it is inserted...
+                  // the value is default constructed, for ints, that is 0
+
+m.erase("abc");
+
+if (m.cout("def")) // 0 not found, 1 found
+```
+
+* iterating over a map - results are presented in sorted key order
+
+```cpp
+for (auto &p: m) { // p is a std.pair(key, value) from <utility>
+  cout << p.first << " " << p.second;
+}
+```
+******
+
+## Visitor Pattern
+
+  * For implementing double dispatch
+  * virtual methods - chosen based on the actual type (at runtime) of the object on which they are called
+  * what if - you want to choose based on two objects?
+
+```
+        | enemy |
+      /             \
+| turtle |        | bullet |
+
+        | Weapon |
+      /           \
+    stick         rock
+```
+  * strike an enemy with a weapon, result depends on both enemy and weapon
+  * if strike virtual in Enemy, choose based on Enemy but not Weapon aiya
+  * if strike virtual in Weapon, choose based on Weapon but not enemy :/
+
+##### Trickery to get dispatch based on both
+  * involves a combination of *overriding* and *overloading*
+
+```cpp
+class Enemy {
+public:
+  virtual void beStruckBy(Weapon &w) = 0;
+};
+
+class Turtle:public Enemy {
+public:
+  void beStruckBy(Weapon &w) override { w.strike(* this); }
+};
+
+class Bullet:public Enemy {
+public:
+  void beStruckBy(Weapon &w) override { w.strike(* this); }
+};
+
+// Turtle and bullet MAY LOOK THE SAMe but they're calling different methods
+// one version which takes a bullet, one that takes a turtle (overload)
+class Weapon {
+public:
+  virtual void strike(Turtle &t) = 0;
+  virtual void strike(Bullet &t) = 0;
+};
+
+class Stick:public Weapon {
+public:
+  void strike(Turtle &t) override {
+    // strike a turtle with a stick
+  }
+  void strike(Bullet &b) override {
+    // strike a bullet with a stick
+  }
+};
+
+// similarly, rock.
+
+Enemy * e = new Bullet (...);
+Weapon * w = new Rock(...);
+
+e->beStruckBy(*w); // what happens?
+```
+* bullet's `bestruckby` runs (by virtual method lookup)
+* calls weapon::strike, `*this` is bullet
+  * bullet version chosen at compile time
+  * virtual strike method call resolves to `rock::strike` on a bullet
+
+##### Visitor can be used to add functionality to existing classes without changing/recompiling
+
+```cpp
+class Book {
+public:
+  ...
+  virtual void accept(BookVisitor &v) { v.visit(* this); }
+};
+class Text:public Book {
+public:
+  ...
+  void accept(BookVisitor &v) override { v.visit(* this) }
+};
+// similarly, comic
+
+class BookVisitor {
+public:
+  virtual void visit(Book &b) = 0;
+  virtual void visit(Text &t) = 0;
+  virtual void visit(Comic &c) = 0;
+};
+```
+##### Application - track how many of each kind of book I have
+
+* Books - by author
+* Text - by topic
+* Comic - by hero
+* I could add:
+  * `virtual void addMeTopMap(...)`
+* or write a visitor:
+
+```cpp
+class Catalogue:public BookVisitor {
+public:
+  map<string, int> theCatalogue;
+  void visit (Book &b) override { ++theCatalogue[b.getAuthor()]; }
+};
+```
+**********
+
+##### But above won't compile... why??
+  * `book.h` includes `BookVisitor.h` includes `text.h` includes `book.h`
+  * circular includes dependency
+  * `Text` does not know what `Book` is
+
+## Compilation Dependencies
+```cpp
+// consider
+class A {...}; // a.h
+
+class B:public A { ... };
+class C {A a;};
+class D {A*ap;};
+class E{A f(A a);};
+```
+
+##### Question: Which of B, C, D, E require an include??
+  * B needs `#include a.h`
+  * C has an A in it, so to know how big a C object is we need an `#include a.h`
+  * pointers are the same size, so all we need in D is `class A;` (forward declaring)
+  * E doesn't need include, only `class A;`
+  * Only A and C need it, because we need to know how big B and C are
+
+##### If there is no compilation dependency necessitated by the code, don't create one with extra includes.
+
+When class `A` changes, only `A`, `B`, `C` need to recompile.
+
+Different story when you look at .cc implementation files. In the implementations of D and E:
+```cpp
+#include "a.h"
+
+void D::f() {
+  myA->someMethod();
+  // need to know about class A here - a true compilation dependency
+  // needs to include a.h here, but not in E's header.
+}
+```
+
+Do the #include in the .cc, not in .h, where possible. Because including .h files in .cc, there would never be a cycle, because you never include .cc files. Reduces compilation cycle errors.
+
+##### Now consider the XWindow class
+```cpp
+class XWindow {
+  Display * d;
+  Window w;
+  int s;
+  GC gc;
+  unsigned long int colors[10];
+public:
+};
+```
+* this is private data. yet we can look at it. do we know what it all means? do we care? (no)
+* what if we add/change a private member? all classes must recompile 😢
+* it would be better if those details weren't there...
+
+##### SOLN: the `pimpl idiom` ("pointer to implementation")
+Create a second class `XWindowImpl.h`
+
+```cpp
+#include <X11/Xlib.h>
+
+struct XWindowImpl {
+  Display * d;
+  Window w;
+  int s;
+  GC gc;
+  unsigned long int colors[10];
+};
+```
+
+Now in `window.h`:
+
+```cpp
+class XWindowImpl;
+class XWindow {
+  XWindowImpl * pimpl;
+public:
+  // no change
+};
+```
+
+In window.cc:
+```cpp
+#include "window.h"
+#include "XWindowImpl.h"
+
+XWindow::XWindow(...):pimpl(new XWindowImpl) {}
+// MIL: need to allocate space for the pointer
+// Also need to destroy pImpl in the dtor
+// Other methods: replace fields (d, w, s, etc.) with pImpl->d, pImpl->w, pImpl->s, etc.
+```
+
+If you confine all private fields to XWindowImpl then only window.cc needs to recompile if XWindow's implementation
+
+##### Generalization - what if there are several possible window implementations, e.g. XWindows and YWindows
+  * then make the Impl structure a superclass
+
+```
+  window (ptr) *----owns-a---> windowImpl
+                                  ^
+                                  |
+                            ---------------
+                            |             |
+                      XWindowImpl       YWindowImpl
+```
+pimpl idiom with a class hierarchy of implementations - called ***bridge pattern***
+
+## Measures of Design Quality
+* coupling and cohesion
+
+##### coupling
+  * the degree to which distinct program modules depend on eachother
+  * ⬇️ low to high ⬆️
+    * modules communicating via function calls with basic params/results
+    * modules pass arrays/structs back and forth
+    * modules affect each other's control flow
+    * modules have access to each other's implementation (friends)
+  * high coupling implies that the changes to a module require greater changes to other modules
+
+##### cohesion
+  * how closely elements of a module are related to each other
+  * ⬇️ low to high ⬆️
+    * arbitrary grouping of unrelated elements (c++ utility)
+    * elements sharing a common theme but otherwise unrelated (perhaps share some base code)
+    * elements manipulate state over the lifetime of an object (e.g. open/read/close files)
+    * elements pass data to eachother
+    * elements cooperate to perform exactly one task 🙏
+
+##### GOAL: LOW COUPLING HIGH COHESION 
