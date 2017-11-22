@@ -1243,4 +1243,149 @@ pimpl idiom with a class hierarchy of implementations - called ***bridge pattern
     * elements pass data to eachother
     * elements cooperate to perform exactly one task 🙏
 
-##### GOAL: LOW COUPLING HIGH COHESION 
+##### GOAL: LOW COUPLING HIGH COHESION
+Your primary program classes should not be printing things!
+E.g.
+```cpp
+class ChessBoard {
+  ...
+  cout << "Your move" << endl;
+};
+```
+Bad design - inhibits code reuse.
+What if you want to reuse Chessboard, but not have it communicate via stdout???
+
+******
+### Missed lecture courtesy of dzed
+
+One solution: give the class stream objects, where it can perform input and output (I/O)
+
+```cpp
+class Chessboard {
+  istream &in;
+  ostrema &out;
+public:
+  ChessBoard(istream &in, ostream &out) :
+    in{in}, out{out} {}
+  // and now we will have this code instead:
+  out << "Your move";
+};
+```
+
+What if we don’t want to use streams at all?
+
+But ChessBoard shouldn’t be talking or doing any communication at all. Its job is to play chess.
+
+### Single-Responsiblity Principle
+
+“A class should have only one reason to change”
+
+In the above example, game state AND communication are TWO reasons to change.
+
+Better solution: Communication with the ChessBoard via parameters and results, and occasionally via exceptions.
+
+Confine user communication to outside the game class.
+
+Question: Should main do all the communication, and then call ChessBoard methods?
+
+Answer: NO. Hard to reuse if it’s in main. Should have a class to manage interaction that is separate from the game state class
+
+## Pattern - Model - View - Controller (MVC)
+
+* Separate the distinct notions of the data (or state), the presentation of the data, and the controll of the data.
+
+Example: ChessBoard
+
+* Model: the main data you are manipulating (e.g. game state)
+* View: how the model is displayed to the user
+* Controller: how the model is manipulated
+`Model -> Controller <- View`
+
+##### Model:
+* Can have multiple views (e.g. text and graphics, or several graphics)
+* Doesn’t need to know about their details
+* Classic observer pattern (or could communicate through controller)
+
+##### Controller:
+* Mediates control flow between the model and view
+* Might encapsulate turn-taking, or full game rules
+* May communicate with user for input (or this could be the view)
+* By decoupling presentation and control, MVC promotes reuse.
+
+### Exception safety
+
+```cpp
+void f() {
+  MyClass * p = new MyClass;
+  MyClass mc;
+  g();
+  delete p;
+}
+```
+No leaks. But what if g raises an exception?
+
+What is guaranteed?
+
+* During stack unwinding, all stack-allocated data is cleaned up - dtors run, memory reclaimed
+* Heap-allocated memory is not freed
+Therefore, if g throws, `*p` is leaked, mc is not. So:
+
+```cpp
+void f() {
+  MyClass * p = new MyClass;
+  MyClass mc;
+  try {
+    g();
+  } catch (...) {
+    delete p;
+    throw;
+  }
+  delete p;
+}
+```
+
+Tedious, error-prone, duplication code. How else can we guarantee that something (e.g. delete p) happens no matter f exits now or exits due to an exception?
+
+In some languages, “finally” clauses (in Java) guarantee certain final actions. NOT IN C++.
+
+The only thing you can count on in C++ is that destructors for stack-allocated data will run.
+
+Thus, use stack-alocated data with dtors as much as possible. Use the guarantee to your advantage.
+
+##### C++ Idiom: RAII - Resource Acquisition Is Initialization
+
+Every resource should be wrapped in a stack-allocated object whose dtor destroys it.
+
+e.g. files:
+```cpp
+void h() {
+  ifstream f("file"); // acquiring the resource, ("file")
+  // initializing the object
+  // ...
+}
+```
+
+File is guaranteed to be closed when f is popped from the stack (f’s dtor runs).
+
+The same can be done with dynamic memory.
+
+```cpp
+class std::unique.ptr<T>; // takes a T* in ctor
+// dtor will free the pointer
+// In-between - can dereference just like a pointer
+
+#include <memory>
+```
+
+fix `f()`:
+```cpp
+void f() {
+  auto p = std::make_unique<class>(); // allocate MyClass on the heap
+  MyClass mc;
+  g();
+}
+```
+
+This will not leak and is also safer. Also shorter.
+
+*****
