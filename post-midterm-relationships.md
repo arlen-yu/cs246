@@ -1389,3 +1389,329 @@ void f() {
 This will not leak and is also safer. Also shorter.
 
 *****
+
+##### 3 levels of exception safety for a function f:
+1. basic guarantee
+  * if an exception occurs, the program will be in some valid state
+  * no leaks, class invariants maintained
+2. strong guarantee
+  * if an exception is raised while executing f, the state of the program will be as it was before f was called
+3. no-throw guarantee
+  * f will never throw an exception, and will always accomplish its task
+
+```cpp
+class A {...}; class B{...};
+class C{
+  A a;
+  B b;
+public:
+  void f() {
+    a.g(); // may throw (strong guarantee)
+    b.h(); // may throw (strong guarantee)
+  }
+};
+```
+
+##### Q: is `C::f` safe??
+  * if `a.g()` throws, nothing has happened yet - ok.
+  * if `b.h()` throws, effects of g would have to be undone to offer the strong gauruntee
+    * very hard or impossible if g has non-local side effects
+  * NO, C::f probably not exception safe
+
+If `A::g`, `B::h` do not have non-local side effects, can use copy+swap
+```cpp
+class C {
+  void f() {
+    A atemp = a;
+    B btemp = b;
+    atemp.g();
+    btemp.h();
+    a = atemp;
+    b = btemp;
+  }
+};
+```
+If any of the first four lines throw, then a + b are still intact. ***BUT*** what if the last two lines throw???
+
+Better if swap was method (copying ptrs cannot throw)
+
+Soln:
+```cpp
+struct CImpl {
+  A a;
+  B b;
+};
+
+class C {
+  unique_ptr<<Impl>> pImpl;
+public:
+  void f() {
+    auto temp = make_unique<<Impl>>(* pImpl);
+    temp->a.g();
+    temp->b.h();
+    std::swap(pImpl, temp); // no throw
+  }
+};
+
+// Strong guarantee!!!
+```
+
+If either A::g or B::h offer no expt safety gaurantees then neither can C::f.
+
+##### Exception safety + the STL - vectors
+* vectors encapsulate a heap allocated array
+  * RAII - when a stack-allocated vector goes out of scope, the interval heap-allocated array is freed
+
+```cpp
+void f() {
+  vector <C> v;
+  ...
+  // v goes out of scope, array is freed, C dtor runs on all objects on the vector
+}
+```
+
+but
+```cpp
+void g() {
+  vector <C*> v;
+  ...
+  // array is freed
+  // pointers dont have dtors so any objects pointed at by ptrs are NOT deleted
+}
+```
+
+[ to delete items: `for (auto &a: v) delete a;`]
+
+but
+```cpp
+void h() {
+  vector <unique_ptr<C>> v;
+  ...
+  // array is freed
+  // unique ptr destructors run
+  // objects are deleted
+  // NO explicit deallocation
+}
+```
+
+`vector<T>::emplace_back` offers the strong guarantee
+  * if the array is full, (size == cap)
+    * allocate a new array
+    * copy items over
+    * delete the old array
+
+  but
+  * copying is expensize, + the old data will be thrown a away
+  * wouldn't moving the objects be more efficient
+    * allocate a new array
+    * move the objs over (move ctor)
+    * delete the old array
+
+If the move ctor is nothrow, emplace_back will use it. Else, it will use the copy ctor (slower)
+
+If you know a function will never throw or propagate an exn, declare it noexcept. Facilitates optimization
+
+At minimum: moves + swaps should be noexcept.
+
+## CASTING
+
+In C: `Node n, int *ip = (int *)(&n);`. Cast forces compiler to treat a Node * as if it where an int * so we can point an int * at a Node. If you MUST cast, use a c++ style cast.
+
+##### 4 kinds:
+  1. static cast - "sensible" casts
+    * e.g. `double d; int f(int x); f(static_case(int)(d));`
+    * e.g. superclass ptr -> subclass ptr
+      * `Book *b = new Text{ ... }`, `Text *t = static_case <Text *>(b)`
+    * "trust me, I know what I'm doing"
+  2. reinterpret_cast - unsafe implementation-specific "weird" conversions
+    * `Student s; Turtle *t = reinterpret_cast <Turtle *>(&s)`
+  3. const cast - for adding/removing const - only c++ const that can "cast away const"
+    * `void g(int *p) {..} void f(const int *p) { // can't g(p) };`
+    * if you know g wont modify p, you can const_cast it to temporarily treat it as const
+  4. dynamic cast - is it safe to convert a `Book *` to a `Text *`??
+    * `Book *pb = ....`
+    * `Text *t = static_case<Text *>(pb);`????
+    * instead to a tentative cast:
+      * `Text *t = dynamic_cast<Text *>(pb);`
+      * 2 outcomes
+        * success - t points at the object, proceed
+        * fails - t will be nullptr
+*******
+```cpp
+// recall
+
+Book *pb = ...;
+Text *pt = dynamic_case <Text *>(pb);
+if (pt) cout << pt->getTopic();
+else cout << "Not a Text" << endl;
+```
+Can use `dynamic_case` to make decisions based on an object's RTTI (Run-Time Type Information)
+
+##### Can we do this with smart ptrs? Yes
+  * `static_pointer_cast`, `const_pointer_cast`, `dynamic_pointer_cast`
+
+
+
+```cpp
+void whatIsIt(shared_ptr<Book> b) {
+  if (dynamic_pointer_cast<Comic>(b)) cout << "comic";
+  else if (dynamic_pointer_cast<Text>(b)) cout << "text";
+  else cout << "Normal book";
+}
+```
+
+##### claim: don't do this
+  * code like this is tightly coupled to the book class hierarchy, may indicate bad design
+
+⭐ better: virtual method of visitor (if possible)
+
+##### dynamic casting also works with references:
+```cpp
+Text { ... };
+Book &b = t;
+Text &t2 = dynamic_cast<Text &>(b);
+```
+
+If the cast succeeds, `t2` refers to `t`.
+
+If not... ? (No such thing as null reference) raises exception `bad_cast`
+
+With dynamic casting we can construct a solution to the polymorphic assignment problems.
+
+```cpp
+Text &Text::operator=(const Book * other) { // virtual
+  const Text &textother = dynamic_cast<const Text &>(other); // throws if other is not a text
+  if (this == &textother) return * this;
+  Book::operator=(other);
+  topic = textother.topic;
+  return this;
+}
+```
+
+##### Note: `dynamic_casting` only works on classes that have at least one virtual method
+
+## How Virtual Methods Work
+
+```cpp
+class Vec {
+  int x, y;
+  void f();
+};
+
+class Vec2 {
+  int x, y;
+  virtual void f();
+};
+
+// what's the difference?
+Vec v{1, 2};
+Vec2 w{1, 2};
+
+// do they look the same in memory
+```
+
+##### answer: nope
+  * first note: 8 is space for 2 ints
+    * no space for methods
+    * compiler stores the methods with all other functions, not the object
+  * recall:
+
+```cpp
+Book * pb = new { Book/Text/Comic };
+pb->isItHeavy();
+```
+  * `isItHeavy` is virtual - you choose which version to run based on the type of the actual object - which the compiler can't know at advance
+  * the correct `isItHeavy` *must* be chosen at runtime. How?
+
+##### for each class with at least one virtual method, the compiler creates a table of f'n pointers (the vtable)
+
+```cpp
+class C {
+  int x, y;
+  virtual void f();
+  virtual void g();
+  void h();
+  virtual ~C();
+};
+```
+
+So:
+
+```
+vtable:
+|"C"|    /-> | actual code|
+| f |---/
+| g |---------> |CODE|
+|~C | ----> | code |
+```
+##### C objs have an extra ptr (the vptr) that pts to C's vtable.
+  * thus, w has 8 extra bytes because w has a vptr
+
+```cpp
+Book b; // has |title|author|numPages|vptr --> |books version of isItHeavy||
+Text t; // has |title|author|topic|vptr --> |texts version of isItHeavy||
+```
+
+##### Calling a virtual method:
+  * follow the vptr to the vtable
+  * fetch a ptr to the actual method from the vtable
+  * follow the function ptr and call the function
+  * this all happens AT RUNTIME, thus virtual method calls incur a small overhead cost in time
+  * also, having virtual methods adds a vptr to the object, therefore classes with virtual methods produce larger objects than if all methods were non-virtual (space cost)
+
+##### concretely, how is the object laid out? compiler dependant
+  * g++ puts the vptr first, then fields
+
+# Multiple Inheritance
+```cpp
+class A {
+public:
+  int a;
+};
+
+class B {
+public:
+  int b;
+};
+
+class C:public A, public B {
+  void f() {
+    cout << a << ' ' >> b;
+  }
+};
+
+class D: public B, public C {
+public:
+  int d;
+};
+
+
+D dobj;
+dobj.a; // ❌ which a?? ambigious
+// need to specify that we want
+dobj.B::a;
+dobj.C::a;
+```
+
+But if `B` and `C` both inherit from `A`, should there be *one* `A` part of `D` or should there be *two* (default)?
+
+Should `B::a`, `C::a` be the same or different?
+
+```
+    A
+  /   \
+ B     C
+  \   /
+    D
+```
+
+***DEADLY DIAMOND***
+
+##### solve by making A a virtual base class, use virtual Inheritance
+```cpp
+class B: virtual public A {};
+class C: virtual public A {};
+```
+e.g. `iostream` uses DDD
+
+##### how will this be laid out??
