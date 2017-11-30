@@ -1715,3 +1715,70 @@ class C: virtual public A {};
 e.g. `iostream` uses DDD
 
 ##### how will this be laid out??
+what does g++ do?
+
+
+******
+# last lecture
+
+```
+B b;
+```
+
+B needs to be laid out so that we can find its A part, but the distance to the A part varies.
+
+***soln*** - location of superclass obj is stored in vtables;
+
+Diagram doesn't look like A, B, C, D simultanously, but slices of it do look like A, B, C, D.
+
+# Template Functions
+
+```cpp
+template<typename T> T min(T x, T y) {
+  return x < y ? x : y;
+}
+
+// use
+int f() {
+  int x = 1, y = 2;
+  int z = min(x, y); // don't have to say min<int>
+}
+```
+
+C++ can infer that T = int from the types of x + y. ***Applies to function templates only***.
+
+If C++ can't determine T, you can tell it `z = min<int>(x, y);`
+
+##### recall
+```cpp
+void for_each(AbstractIterator &start, AbstractIterator &finish, int (*f)(int)) {
+  while (start != finish) {
+    f(*start) ;
+    ++start;
+  }
+}
+```
+
+* requirements: abstractiterator must support `!=`, `*`, `++`
+* f must be callable as a f'n
+* make these a template aggregation
+
+```cpp
+tempalte<typename Iter, typename fn> void for_each(Iter start, Iter finish, fn f) {
+  // as before
+}
+```
+
+* now iter can be *any* type that supports `++`, `!=`, `*` including raw pointers.
+
+```cpp
+void f(int n) {
+  cout << n << endl;
+}
+```
+
+# C++ STL <algorithm> library
+
+* suite of template functions, many of which work on iterators.
+
+# too lazy to keep taking notes just check July 21, 2016 - Lecture 24 on dzed. ✌️
