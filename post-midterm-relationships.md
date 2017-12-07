@@ -174,7 +174,189 @@ public:
 
 
 ******
-# missed lecture [dzed](http://dzed.me/notes/2016/05/02/Cs-246.html) june 15/16th ish
+
+* Derived classes *inerit* fields and methods from the base class. Any method that can be invoked on Book can be called on Text and Comic.
+
+##### Who can see these members?
+  * title, author, numPages, private in Book; Text and Comic cannot see them, even subclasses can't see them
+
+##### Initializing text?
+  * need title, author, numpages (for book part) and topic (specific to text)
+  * is this wrong ❌ for 2 reasons:
+    1. title etc are note accessible to Text
+    2. once again, when an object is constructed:
+      1. space is allocated
+      2. superclass part is constructed (new)
+      3. fields constructed
+      4. constructor body runs
+  * in this case, superclass cannot be constructed because book has no default constructor
+
+##### FIX: invoke Book's constructor in Text's MIL
+```cpp
+class Text : public Book {
+  string topic;
+public:
+  Text(string title, string author, int numPages, string topic):
+  Book{title, author, numPages}, topic{topic} {}
+};
+```
+
+##### NOTE: if a superclass has no default constructor, subclass must invoke a superclass constructor in its MIL. Good reasons to keep superclass's fields inaccessible to subclasses. If you want to give subclasses access to certain members, use *protected* access:
+
+```cpp
+class Book {
+  protected:
+    string title, author;
+    int numPages; // accessible to Book and its subclasses
+  public:
+    Book(...);
+    // ...
+};
+
+// subclasses
+class Text: public Book {
+  // ...
+  public:
+    // ...
+    void addAuthor(string newAuthor) {
+      author += newAuthor;
+    }
+};
+```
+
+Note: not a good idea to give subclasses unlimited access to fields; better - make fields private, but provide protected accessors
+
+```cpp
+class Book {
+  string author, title;
+  int numPages;
+protected:
+  string getTitle() const;
+  void setAuthor(string newAuthor);
+public:
+  Book(...); // ctor
+  bool isItHeavy() const;
+};
+```
+
+* relationship amoung Book, Text, Comic, is called *is a*. Implement it by public inheritance.
+
+##### Consider `isItHeavy`. When is a book heavy?
+  * for ordinary book, > 200 pages
+  * for texts, > 500 pages
+  * for comics, > 30 pages
+
+```cpp
+class Book {
+  // ...
+public:
+  // ...
+  bool isItHeavy() const {
+    return numPages > 200;
+  }
+};
+
+class Text {
+  // ...
+public:
+  // ...
+  bool isItHeavy() const {
+    return numPages > 500;
+  }
+};
+
+class Comic {
+  // ...
+public:
+  // ...
+  bool isItHeavy() const {
+    return numPages > 30;
+  }
+};
+
+// =====================
+// client
+Book b {"A small book", "1Q84", 50};
+Comic c {"A big comic", "yes boi", 40, "o no"};
+cout << b.isItHeavy(); // false, it's a small Book as 50 < 200
+cout << c.isItHeavy; // true, it's a big comic as 40 > 30
+```
+
+Since public inheritance is `is a`, we can do:
+```cpp
+Book b = Comic{"A big comic", "Balkan Chevaps", 40, "We Deliver"};
+```
+
+##### Question: is b heavy?
+  * answer: no, its not heavy. Book::isItHeavy is what runs. Why? Book contains 3 fields: title, author, numPages, while Comic contains 4 fields: title, author, numpages, and hero.
+  * thus, `Book b = Comic {...};` tries to create a comic object when theres only space for a Book, so "hero" field is chopped offer
+    * Comic is forced into a Book!! so Book::isItHeavy runs
+  * instead, access through pointers
+
+```cpp
+Comic c {"friend5ever", "Sedra Smith", 40, "RealisticAFMStudent"};
+Book *pb = &c;
+Comic *pc = &c;
+cout << pc->isItHeavy(); // true; 40 > 30, heavy Comic
+cout << pb->isItHeavy(); // false, 40 < 200, not heavy Book
+// same behaviour as the slicing example, Book::isItHeavy runs as pointer is Book
+```
+
+##### BUT
+  * Book::isitHeavy still runs....
+    * compiler uses the type of pointer to decide which isitheavy to run, does not consider the actual type of the object
+  * how to make a comic act like a comic, even when pointed at by a book pointer?
+    * DECLARE THE METHOD VIRTUAL
+
+```cpp
+class Book {
+  // ... fields
+protected:
+  int numPages;
+public:
+  Book(...);
+  virtual bool isItHeavy() const; // use of virtual here
+};
+
+class Comic : public Book {
+  // ...
+public:
+  bool isItHeavy() const override; // override keyword in virtual function
+};
+
+// =================
+// client
+Comic c {"RealisticMathStudent", "UWGo", 40, "Quest God"};
+Book *pb = &c;
+Book *rb = c;
+Comic &pc = &c;
+Book b = c;
+
+cout << pb->isItHeavy(); // true, Comic::isItHeavy
+cout << rb.isItHeavy(); // true, Comic::isItHeavy
+cout << pc->isItHeavy(); // true, Comic::isItHeavy
+cout << b.isItHeavy(); // FALSE, Book::isItHeavy
+```
+
+# Virtual and Polymorphism
+
+##### virtual methods
+  * chosen based on the actual types of the object at runtime
+##### dynamic dispatch
+  * the process of virtual methods being resolved to the correct one at runtime
+
+e.g. my book collection
+
+```cpp
+Book *myBooks[20];
+for (int i = 0; i < 20; i++) {
+  cout << myBooks[i]->isItHeavy << endl;
+  // This uses Book::isItHeavy for Books, Text::isItHeavy for Texts
+  // and Comic::isItHeavy for Comics
+}
+```
+it accommodates multiple types under one abstraction - ***polymorphism***
+
 ******
 
 ### Destructor revisited
