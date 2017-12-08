@@ -3,18 +3,224 @@
 Trivia and a lot of examples, mostly from tutorials
 
 # Table of Contents
-1. [Abstract](#abstract)
-2. [Design](#design)
+1. [Relationships](#relationships)
+   - [Types of Relationships](#types)
+   - [Inheritance](#inherit)
+   - [Copy/Move](#copy)
+2. [Abstraction](#abstract)
+3. [Design](#design)
    - [Abstract Iterator Pattern](#aip)
    - [Factory Design Pattern](#fdp)
    - [Template Method Pattern](#tmp)
    - [Visitor Pattern](#vp)
    - [pImpl Idiom](#pimpl)
-3. [Measure of Design Quality](#measure)
-4. [Compilation](#compilation)
-5. [Resource Aquisition is Initialization (RAII)](#raii)
+4. [Measure of Design Quality](#measure)
+5. [Compilation](#compilation)
+6. [Resource Aquisition is Initialization (RAII)](#raii)
    - [Smart Pointers](#shared)
-6. [Exception Safety](#exception)
+7. [Exception Safety](#exception)
+
+## Relationships <a name="relationships"></a>
+
+##### Three main types of relationships: <a name="types"></a>
+1. composition (***owns-a***)
+   * `class A` owns an instance of `class B`
+   * `class A` is responsible for deleting the instance of `class B` when `class A` is destroyed
+   * car owns 4 wheels; destroy a car, destroy the wheels; copy a car, copy the wheels
+2. aggregation (***has-a***)
+   * `class A` has an instance of `class B`
+   * `class A` is not responsible for deleting the instance of `class B`
+3. inheritance (***is-a***)
+   * `class B` is an instance of `class A`
+   * an instance of `class B` can be used in any situation where an instance of `class A` can be used
+
+
+If `class A` has a pointer to an instance of `class B`, you don't know if its composition of aggregation without looking at the source code:
+```cpp
+B b;   // This is composition
+B* b2; // This could be composition or aggregation
+```
+
+## Inheritance <a name="inherit"></a>
+##### e.g. tracking collection of books:
+
+```cpp
+class Book {
+  string title, author;
+  int numPages;
+public:
+  Book (....);
+};
+
+class Text:public Book {
+  string topic;
+public:
+  Text (.....);
+};
+
+class Comic:public Book {
+  string hero;
+public:
+  Comic (.....);
+};
+```
+
+##### How do we initialize `Text`?
+* need title, author, numpages (for book part) and topic (specific to text)
+* soln: ***invoke Book's constructor in Text's MIL***
+
+```cpp
+class Text : public Book {
+  string topic;
+public:
+  Text(string title, string author, int numPages, string topic):
+  Book{title, author, numPages}, topic{topic} {}
+};
+```
+
+##### Good design habits
+* not a good idea to give subclasses unlimited access to fields; better - make fields private, but provide protected accessors
+
+```cpp
+class Book {
+  string author, title;
+  int numPages;
+protected:
+  string getTitle() const;
+  void setAuthor(string newAuthor);
+public:
+  Book(...); // ctor
+  bool isItHeavy() const;
+};
+```
+
+* how to make a comic act like a comic, even when pointed at by a book pointer?
+  * soln: declare the certain method ***virtual***
+
+```cpp
+class Book {
+  // ... fields
+protected:
+  int numPages;
+public:
+  Book(...);
+  virtual bool isItHeavy() const; // use of virtual here
+};
+
+class Comic : public Book {
+  // ...
+public:
+  bool isItHeavy() const override; // override keyword in virtual function
+};
+
+// =================
+// client
+Comic c {"RealisticMathStudent", "UWGo", 40, "Quest God"};
+Book *pb = &c;
+Book *rb = c;
+Comic &pc = &c;
+Book b = c;
+
+cout << pb->isItHeavy(); // true, Comic::isItHeavy
+cout << rb.isItHeavy(); // true, Comic::isItHeavy
+cout << pc->isItHeavy(); // true, Comic::isItHeavy
+cout << b.isItHeavy(); // FALSE, Book::isItHeavy
+```
+
+### Copy/Move <a name="copy"></a>
+Consider:
+```cpp
+class Book {
+  ...
+public:
+  // Defines a copy/move constructor and assignment
+};
+
+class Text:public Book {
+  string topic;
+public:
+  // Does not define copy/move
+};
+
+Text t{"algorithms", "clrs", 50000, "cs"};
+Text t2 = t;
+```
+
+##### Question: no copy ctor in Text - what happens?
+* calls Book's copy ctor
+* goes field by field i.e. default behavior for the Text part
+* same is true for the other operations
+
+```cpp
+Text::Text(const Text &other): Book(other), topic(other.topic) {}
+
+Text &Text::operator=(const Text &other) {
+  Book::operator=(other);
+  topic = other.topic;
+  return * this;
+}
+
+Text::Text(Text &&other): Book(other), topic(other.topic) {} ❌❌❌
+// other refers to an rvalue, but IS AN LVALUE
+// so book COPY CTOR IS RUNNING not MOVE CTOR
+
+// std::move(other) means treat this like garbage ⭐
+Text::Text(Text &&other): Book(std::move(other)), topic(std::move(other.topic)) {}
+```
+
+***Even though `other` and `other.top` refer to rvalues, they themselves are lvalues***
+
+`std::move(x)` forces an lvalue x to be treated as an rvalue so that the "move" versions of the operations run
+
+```cpp
+// same kinda deal for move assignment
+Text &Text::operator=(Text &&other) {
+  Book::operator=(std::move(other));
+  topic = std::move(other.topic);
+  return * this;
+}
+```
+
+##### problem:
+
+```cpp
+Text t1 {...};
+Text t2 {...};
+Book *pb1 = &t1, *pb2 = &t2;
+// What if we do:
+*pb1 = *pb2;
+```
+
+* it is Book::operator= that runs!!
+* called partial assignment - copies only the book part ❌
+
+##### Soln: all superclasses should be abstract:
+
+```cpp
+class AbstractBook {
+  string title, author;
+  int numpages;
+protected: // ❗
+  AbstractBook &operator=(const AbstractBook &other);
+public:
+  AbstractBook( ... );
+  virtual ~AbstractBook() = 0;
+};
+```
+```cpp
+class NormalBook:public AbstractBook {
+public:
+  NormalBook(....);
+  ~NormalBook();
+  NormalBook &operator=(const NormalBook &other) {
+    AbstractBook::operator=(other); // copy the abstractbook part
+    // no other fields, nothing left to do
+    return * this;
+  }
+}; // other classes are similar, except with extra fields
+```
+
+*Don't forget to implement the virtual destructor*
 
 ## Abstract <a name="abstract"></a>
 * a class is an abstract class if it has one or more pure virtual methods
