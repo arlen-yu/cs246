@@ -8,17 +8,19 @@ Trivia and a lot of examples, mostly from tutorials
    - [Inheritance](#inherit)
    - [Copy/Move](#copy)
 2. [Abstraction](#abstract)
-3. [Design](#design)
+3. [Templates](#templates)
+4. [Design](#design)
    - [Abstract Iterator Pattern](#aip)
+   - [Observer Pattern](#op)
    - [Factory Design Pattern](#fdp)
    - [Template Method Pattern](#tmp)
    - [Visitor Pattern](#vp)
    - [pImpl Idiom](#pimpl)
-4. [Measure of Design Quality](#measure)
-5. [Compilation](#compilation)
-6. [Resource Aquisition is Initialization (RAII)](#raii)
+5. [Measure of Design Quality](#measure)
+6. [Compilation](#compilation)
+7. [Resource Aquisition is Initialization (RAII)](#raii)
    - [Smart Pointers](#shared)
-7. [Exception Safety](#exception)
+8. [Exception Safety](#exception)
 
 ## Relationships <a name="relationships"></a>
 
@@ -160,11 +162,11 @@ Text &Text::operator=(const Text &other) {
   return * this;
 }
 
-Text::Text(Text &&other): Book(other), topic(other.topic) {} ❌❌❌
+Text::Text(Text &&other): Book(other), topic(other.topic) {} ❌
 // other refers to an rvalue, but IS AN LVALUE
 // so book COPY CTOR IS RUNNING not MOVE CTOR
 
-// std::move(other) means treat this like garbage ⭐
+// std::move(other) means treat this like garbage
 Text::Text(Text &&other): Book(std::move(other)), topic(std::move(other.topic)) {}
 ```
 
@@ -181,7 +183,7 @@ Text &Text::operator=(Text &&other) {
 }
 ```
 
-##### problem:
+Consider:
 
 ```cpp
 Text t1 {...};
@@ -191,8 +193,7 @@ Book *pb1 = &t1, *pb2 = &t2;
 *pb1 = *pb2;
 ```
 
-* it is Book::operator= that runs!!
-* called partial assignment - copies only the book part ❌
+* it is Book::operator= that runs - copies only the book part ❌
 
 ##### Soln: all superclasses should be abstract:
 
@@ -229,6 +230,37 @@ public:
 * a virtual destructor must be implemented even though it is pure virtual
   * this is because the destructor of the base class is called even when a derived class is destroyed
   * thus, the destructor of the base class must have some implementation (even if the implementation is empty)
+
+## Templates <a name="templates"></a>
+* important example - ***stack***
+
+```cpp
+template <typename T> class Stack {
+  int size, cap;
+  T * the stack;
+public:
+  Stack(...);
+  void push(T x);
+  T top();
+  void pop();
+};
+
+// Client:
+  List <int> l1;
+  List <List <int>> l2;
+  l1.addToFront(3);
+  l2.addToFront(l1);
+
+// Looping:
+  for (List<int>:: Iterator it=l1.begin(); it != l1.end(); ++it) {
+    cout << * it << endl;
+  }
+
+  for (auto n : l1)
+    cout << n << endl;
+```
+
+Compiler specializes templates at the source code level, before compilation. I.e. the compiler writes the new classes for you.
 
 ## Design Patterns <a name="design"></a>
 ### Abstract Iterator Pattern <a name="aip"></a>
@@ -323,6 +355,102 @@ int List::ith(int i) {
   Node *cur = theList;
   for (int j = 0; j < i && cur; ++j, cur = cur -> next);
   return cur->data;
+}
+```
+### Observer Pattern <a name="op"></a>
+* follows the pubsub model, one publisher/subject generates data, one or more subscriber/observer classes receive and react to it
+* subjects should not need to know all the details of the observers
+```
+*Subject* o-----------> *Observer*
+ ________________        __________
+ +notifyObservers        +*notify()*
+ +attach(Observer)           ^
+ +detach(Observer)           |
+       ^                     |
+       |                     |
+       |                     |
+ ConcreteSubject <-----o ConcreteObserver
+ ________________        ________________
+ +getState()             +notify()
+ +setState(?)
+```
+
+##### Order of calls
+1. subject state changes
+2. `subject::notifyObservers()` called either by subject itself or external Controller
+   * calls each observer's `notify`
+3. each observer calls `ConcreteSubject::getState` to get new state and reacts appropriately
+
+##### Example: horse race
+
+```cpp
+class Subject {
+  vector <Observer*> observers;
+public:
+  void attach(Observer * ob) {
+    observers.emplace_back(ob);
+  }
+  void detach(Observer * ob) {
+    // remove it from the vector
+  }
+  void notifyObservers() {
+    for (auto &ob: observers) ab->notify();
+  }
+  virtual ~Subject() = 0;// still have to implement it!
+};
+
+// somewhere in cc....
+Subject::~Subject() {}
+// ...................
+
+class Observer {
+public:
+  virtual void notify() = 0;
+  virtual ~Observer();
+};
+
+class HorseRace:public Subject {
+  ifstream in; // source of winners
+  string lastwinner;
+public:
+  HorseRace(string source): in(source) {}
+  bool runRace() {
+    return in >> lastwinner ? true : false; // true means there was a race, false means out of races
+  }
+  string getState() {
+    return lastwinner;
+  }
+};
+
+class Bettor:public Observer {
+  HorseRace * subject;
+  string name, myHorse;
+public:
+  Bettor(  ): ..... {
+    subject->attach(this);
+  }
+  ~Bettor() {
+    subject->detach(this);
+  }
+  void notify() {
+    string winner = subject->getState();
+    if (winner == myHose) {
+      cout << "win!" << endl;
+    } else {
+      cout << "lose :(" << endl;
+    }
+  }
+};
+
+// main.cc
+int main() {
+  HorseRace hr{"file.txt"};
+  Bettor Larry{&hr, "Larry", "RunsLikeACow"};
+  ... // other bettors
+
+  while (hr.runRace()) {
+    hr.notifyObservers();
+  }
 }
 ```
 
@@ -635,10 +763,10 @@ template <typename T> struct Node {
 ## Exception Safety  <a name="exception"></a>
 ##### Three levels of guarantee that you can provide with respect to exception safety:
 1. basic guarantee
-  * if an exception is thrown, data will be in a valid state and all class invariants are maintained
-  * ex. if we change variables in an assignment operator before allocating heap memory with new
+   * if an exception is thrown, data will be in a valid state and all class invariants are maintained
+   * ex. if we change variables in an assignment operator before allocating heap memory with new
 2. strong guarantee
-  * if an exception is thrown, the data will appear as if nothing happened
-  * ex. the copy and swap idiom for assignment operator
+   * if an exception is thrown, the data will appear as if nothing happened
+   * ex. the copy and swap idiom for assignment operator
 3. no-throw guarantee
-  * an exception is never thrown, the function must always succeed
+   * an exception is never thrown, the function must always succeed
