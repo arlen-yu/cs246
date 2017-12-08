@@ -3,24 +3,202 @@
 Trivia and a lot of examples, mostly from tutorials
 
 # Table of Contents
-1. [Relationships](#relationships)
+1. [References](#ref)
+2. [The Big Five](#big)
+3. [Invariants/Encapsulation](#inv)
+4. [Relationships](#relationships)
    - [Types of Relationships](#types)
    - [Inheritance](#inherit)
    - [Copy/Move](#copy)
-2. [Abstraction](#abstract)
-3. [Templates](#templates)
-4. [Design](#design)
+5. [Abstraction](#abstract)
+6. [Templates](#templates)
+7. [Design](#design)
    - [Abstract Iterator Pattern](#aip)
    - [Observer Pattern](#op)
    - [Factory Design Pattern](#fdp)
    - [Template Method Pattern](#tmp)
    - [Visitor Pattern](#vp)
+   - [Decorator Pattern](#dec)
    - [pImpl Idiom](#pimpl)
-5. [Measure of Design Quality](#measure)
-6. [Compilation](#compilation)
-7. [Resource Aquisition is Initialization (RAII)](#raii)
+8. [Measure of Design Quality](#measure)
+9. [Compilation](#compilation)
+10. [Resource Aquisition is Initialization (RAII)](#raii)
    - [Smart Pointers](#shared)
-8. [Exception Safety](#exception)
+11. [Exception Safety](#exception)
+
+## References <a name="ref"></a>
+References are like constant pointers with automatic dereferencing.
+```cpp
+int y = 10;
+int &z = y; // Called an lvalue reference to int (to y)
+```
+
+##### Things you can't do with lvalue References
+1. can't leave them unitialized (e.g. `int &x;` ❌)
+2. they must be initialized with something which has an address since references are Pointers
+   * `int &x = 4;` ❌
+   * `int &x = y + z;` ❌
+   * `int &x = y;` ✔️
+3. create a pointer to a reference
+   * `int &*x = .....;` ❌
+   * reference to a pointer `int *&x = .....;` ✔️
+4. create a reference to a reference
+   * `int &&r = ......;` ❌
+5. create an array of references
+   * `int &r[3] = {.., .., ..}`
+
+### Lvalues and Rvalues
+* an lvalue is any entity which has an address
+* an rvalue is anything which is not an lvalue
+  * get their name because an rvalue can only occur on the right side of an assignment expression
+  * an rvalue reference itself is considered as an lvalue
+* use std::move() to convert any value to an rvalue
+  * example [here](#move)
+
+## The Big Five <a name="big"></a>
+
+##### Steps for object creation
+1. space is allocated (stack/heap)
+2. default initialization of fields that are objects
+3. constructor body runs
+
+##### MIL is used to 'hijack' step 2
+```cpp
+struct Student {
+  int assns, mt, final;
+  const int id; // ya
+  Student (int assn, int mt, int final, int id): assn(assn), mt(mt), final(final), id(id) {} // can only initialize constant here
+}
+```
+```cpp
+Node plusOne(Node n) {
+  for (Node *p{&n}; p; p = p->next) ++p->data;
+  return n;
+}
+
+Node n{1, new Node {2, nullptr}};
+Node n2{plusOne(n)};
+```
+* Theoretically 2 basic constructor calls and 6 copy constructor calls
+* However, only 2 constructor calls and 4 copy constructor calls due to *copy/move elision*
+
+```cpp
+struct Node {
+  Node(); // default constructor
+  ~Node(); // destructor
+  Node(const Node &); // copy constructor
+  Node(Node &&); // move constructor
+  Node &operator=(const Node &); // copy assignment
+  Node &operator=(const Node &&); // move assignment
+};
+
+// copy constructor
+Node::Node(const Node &other): data(other.data), next(other.next ? new Node(*other.next) : nullptr) {}
+
+// move constructor
+Node::Node(const Node &&other): data(other.data), next(other.next) {
+  other.next = nullptr;
+}
+
+// copy assignment
+Node &Node::operator=(const Node &other) {
+  if (this == &other) return *this;
+  data = other.data;
+  delete next;
+  next = other.next ? new Node(*other.next) : nullptr;
+  return *this;
+}
+
+// move assignment
+Node &Node::operator=(Node &&other) {
+  swap(data, other.data);
+  swap(next, other.next);
+  return *this;
+}
+
+// OR move assignment pt2:
+Node &Node::operator=(Node &&other) {
+  data = other.data;
+  delete next;
+  next = other.next;
+  other.next = nullptr;
+  return \*this;
+}
+
+// destructor
+Node::~Node() {
+  delete next;
+}
+```
+
+##### about destructors
+  * stack-allocated: called when it goes out of scope
+  * heap-allocated: is deleted
+  * specifically:
+     1. the destructor body runs
+     2. the destructor is called on all the fields (in reverse declaration order)
+     3. space is deallocated
+
+If you need to customize any one of:
+  1. copy constructors
+  2. copy assignment
+  3. destructors
+  4. move ctor
+  5. move assignment
+
+Then you *usually* need to customize all 5.
+
+## Invariants/Encapsulation <a name="inv"></a>
+```cpp
+struct Node {
+  int data;
+  Node *next;
+  Node (int data, Node *next); // fill in urself
+  ...
+  ~Node() { delete next; }
+};
+
+Node n1 {1, new Node {2, nullptr}};
+Node n2 {3, nullptr};
+Node n3 {4, &n2};
+```
+
+##### what happens when n1, n2, n3 go out of scope?
+* n1, destructor runs and then deletes the whole list
+* n2 and n3, n3's destructor runs and then tries to delete n2, but n2 is on the *stack* not the *heap* (undefined behavior)
+* node relies on the assumption that `next` is either a `nullptr` or a valid pointer to the heap. this is an ***invariant***
+  * e.g. stack: invariant is that the last item pushed is the first item popped
+
+##### Enforcing invariants - Encapsulation
+  * create a wrapper class for the Nodes of a linked list
+
+```cpp
+// list.h
+class List {
+  struct Node; // private nested class
+  Node *theList = nullptr;
+public:
+  void addToFront(int n);
+  int ith(int i);
+  ~List();
+};
+
+// list.cc
+struct List::Node {
+  int data;
+  Node *next;
+  Node(int data, Node * next): ....
+  ~Node() { delete next; }
+};
+
+List::~List(){ delete theList; }
+List::addToFront(int n) { theList = new Node(n, theList); }
+int List::ith(int i) {
+  Node *curr = theList;
+  for (int j = 0; j < i && curr; curr = curr->next, ++j);
+  return curr->data;
+}
+```
 
 ## Relationships <a name="relationships"></a>
 
@@ -152,6 +330,8 @@ Text t2 = t;
 * calls Book's copy ctor
 * goes field by field i.e. default behavior for the Text part
 * same is true for the other operations
+
+<a name="move" />
 
 ```cpp
 Text::Text(const Text &other): Book(other), topic(other.topic) {}
@@ -576,6 +756,71 @@ Enemy * e = new Bullet (...);
 Weapon * w = new Rock(...);
 
 e->beStruckBy(*w); // what happens?
+```
+### Decorator Pattern <a name="dec"></a>
+* we want to enhance an object ***at runtime***, i.e. add functionality/features
+
+```
+                | PIZZA |<------------
+                /       \            |
+| CRUST AND SAUCE |     | DECORATOR |o
+                            ^
+                            |
+                --------------------------
+                |           |            |
+| Stuffed Crust |   | Topping |     | Dipping Sauce |
+```
+
+* every decorator is a component, and every decorator has a component ⭐
+* eg:
+
+```cpp
+class Pizza {
+public:
+  virtual float price() const = 0;
+  virtual string desc() const = 0;
+  virtual ~Pizza();
+};
+
+class CrustAndSauce:public Pizza {
+public:
+  float price() const override { return 5.99; }
+  string desc() const { return "Pizza"}
+};
+
+class Decorator:public Pizza {
+protected:
+  pizza * component;
+public:
+  Decorator(Pizza * p): component(p) {}
+  ~Decorator() { delete component; }
+};
+
+class StuffedCrust:public Decorator {
+public:
+  StuffedCrust(Pizza * p): Decorator(p) {}
+  float price() const override { return component->price() + 2.69; }
+  string desc() const override { return component->desc() + " with stuffed crust"; }
+};
+
+class Topping:public Decorator {
+  string theTopping;
+public:
+  Topping(string topping, Pizza * p): Decorator(p), topping(topping) {}
+  float price() const override { return component->price() + 0.75; }
+  string desc() const override { return component_>desc() + " with " + theTopping; }
+};
+```
+```cpp
+// USE
+
+Pizza * p1 = new CrustAndSauce;
+p1 = new Topping("Cheese", p1);
+p1 = new Topping("Mushrooms", p1);
+p1 = new StuffedCrust(p1);
+
+cout << p1.desc() << ' ' << p1.price();
+delete p1;
 ```
 
 ### pImpl <a name="pimpl"></a>
