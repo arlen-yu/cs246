@@ -5,10 +5,10 @@ Trivia and a lot of examples, mostly from tutorials
 # Table of Contents
 1. [Abstract](#abstract)
 2. [Design Patterns](#design)
-  1. [Abstract Iterator Pattern](#aip)
-  2. [Factory Design Pattern](#fdp)
-  3. [Template Method Pattern](#tmp)
-  4. [Visitor Pattern](#vp)
+  - [Abstract Iterator Pattern](#aip)
+  - [Factory Design Pattern](#fdp)
+  - [Template Method Pattern](#tmp)
+  - [Visitor Pattern](#vp)
 
 ## Abstract <a name="abstract"></a>
 * a class is an abstract class if it has one or more pure virtual methods
