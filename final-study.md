@@ -11,6 +11,7 @@ Trivia and a lot of examples, mostly from tutorials
    - [Inheritance](#inherit)
    - [Copy/Move](#copy)
 5. [Abstraction](#abstract)
+   - [Destructor](#destruct)
 6. [Templates](#templates)
 7. [Design](#design)
    - [Abstract Iterator Pattern](#aip)
@@ -23,7 +24,7 @@ Trivia and a lot of examples, mostly from tutorials
 8. [Measure of Design Quality](#measure)
 9. [Compilation](#compilation)
 10. [Resource Aquisition is Initialization (RAII)](#raii)
-   - [Smart Pointers](#shared)
+    - [Smart Pointers](#shared)
 11. [Exception Safety](#exception)
 
 ## References <a name="ref"></a>
@@ -404,12 +405,40 @@ public:
 *Don't forget to implement the virtual destructor*
 
 ## Abstract <a name="abstract"></a>
-* a class is an abstract class if it has one or more pure virtual methods
+* a class is an abstract class if it has ***one or more pure virtual methods***
+* a class is a concrete class if is has ***no pure virtual methods***
+* the purpose of an abstract class is to allow subclasses to inherit from a base class containing the info that is common
 * you can not create objects of abstract classes
 * a subclass of an abstract class is, by default, also abstract, unless the subclass overrides ***all*** pure virtual methods of the base class
-* a virtual destructor must be implemented even though it is pure virtual
-  * this is because the destructor of the base class is called even when a derived class is destroyed
-  * thus, the destructor of the base class must have some implementation (even if the implementation is empty)
+
+
+### Destructor <a name="destruct"></a>
+1. your destructors should **always be virtual**
+   * to ensure the right destructor is called when polymorphism is involved
+2. your destructors must always have an implementation, even if they are virtual
+   * this is because the destructor of the base class is called even when a derived class is destroyed
+   * thus, the destructor of the base class must have some implementation (even if the implementation is empty)
+
+
+```cpp
+class B {
+public:
+  virtual ~B() = 0;             // these two methods are pure virtual
+  virtual string hello() = 0;   // making B an abstract class
+};
+
+class A: public B {
+  ... // inherits all fields from B
+  A* arr;
+public:
+  A(): arr{new A[5]} {}
+  ~A() { delete [] arr; }
+  string hello() override { return "hello"; }
+};
+
+// In B.cc
+B::~B() {} // need this..
+```
 
 ## Templates <a name="templates"></a>
 * important example - ***stack***
@@ -1006,6 +1035,37 @@ template <typename T> struct Node {
 
 
 ## Exception Safety  <a name="exception"></a>
+* instead of using C-style strategies of handling errors, we use exceptions in C++ to control the behaviour of the program when errors arise
+* by default, if an exception is raised/thrown, the program will terminate if there is no handler (read: catch block) for it
+* the try and catch blocks come with each other. You can not have one without the other.
+* we can throw anything, including exception classes, strings, integers, etc.
+* unless it’s a primative type, we always catch by reference.
+  * if we weren’t passing objects by reference in the catch parameter, slicing could occur; potentially resulting in missing information.
+* ***throw by value, catch by reference***
+
+
+```cpp
+class BadInput{};
+
+class BadNumber: public BadInput{
+  string what() { return "no number given" }
+};
+
+int main(){
+  try{
+    cin >> x;
+    if (x < 50){
+      throw BadNumber{};
+    }
+  }
+  catch(BadInput& b){}
+  //accessing auxilliary information
+  //from object that was caught
+  catch(BadNumber& b){ cerr << b.what() << endl; }
+}
+```
+
+
 ##### Three levels of guarantee that you can provide with respect to exception safety:
 1. basic guarantee
    * if an exception is thrown, data will be in a valid state and all class invariants are maintained
