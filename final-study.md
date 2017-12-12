@@ -26,6 +26,8 @@ Trivia and a lot of examples, mostly from tutorials
 10. [Resource Aquisition is Initialization (RAII)](#raii)
     - [Smart Pointers](#shared)
 11. [Exception Safety](#exception)
+12. [Casting](#casting)
+13. [How Virtual Methods Work](#vmethod)
 
 ## References <a name="ref"></a>
 References are like constant pointers with automatic dereferencing.
@@ -307,6 +309,25 @@ cout << rb.isItHeavy(); // true, Comic::isItHeavy
 cout << pc->isItHeavy(); // true, Comic::isItHeavy
 cout << b.isItHeavy(); // FALSE, Book::isItHeavy
 ```
+
+#### Arrays and Inheritance
+Consider:
+```cpp
+void foo(A* arr) {
+  arr[0] = A{10};
+  arr[1] = A{7};
+}
+B arr[2] = {{1,2}, {3,4}};
+foo(arr);
+```
+
+what happens with this code?
+* compiles perfectly types match
+* but `foo` believes the array it receive is an array of `A`'s
+* so when we assign a value to `arr[1]`, the value 7 will be actually assigned to the location where 2 is stored
+* this means our data is misaligned and this is dangerous
+
+##### Never use array objects polymorphically. If you want a polymorphic array, use an array of pointers
 
 ### Copy/Move <a name="copy"></a>
 Consider:
@@ -1075,3 +1096,106 @@ int main(){
    * ex. the copy and swap idiom for assignment operator
 3. no-throw guarantee
    * an exception is never thrown, the function must always succeed
+
+## Casting  <a name="casting"></a>
+4 kinds of casting:
+
+`static_cast` - "sensible cast"
+
+```cpp
+Book *b = new Text {...};
+Text *t = static_cast<Text*>(b);
+```
+
+ * you are taking responsibility that b actually points at a `Text`
+
+
+`reinterpret_cast` - unsafe, "weird" conversions
+
+```cpp
+Student s;
+Turtle *t = reinterpret_cast<Turtle*>(&s);
+```
+
+`const_cast` - for converting between const and non-const, only c++ cast that can "cast away const"
+
+```cpp
+void g(int *p); // g doesn't promise not the change *p
+// but suppose g doesn't actually change *p (assumption)
+
+void f(const int *p) { // f promises not to change *p
+  // ...
+  g(p); // WRONG
+  g(const_cast<int*>p); // CORRECT
+  // casting the constness away
+}
+```
+
+`dynamic_cast` - is it safe to convert a `Book *` to a `Text *`??
+
+```cpp
+Book *pb = ...; // don't know the right side
+static_cast<Text*>(*pb)->getTopic(); // safe?
+```
+Is this safe? Use a tentative cast instead:
+```cpp
+Book *pb = ...;
+Text *pt = dynamic_cast<Text*>(pb);
+```
+
+If the cast works(i.e. pb points at a Text or a subclass of Text), then pt points at the object. If the cast fails, pt will be a nullptr. So we can check if the cast is successful by:
+
+```cpp
+Book *pb = ...;
+Text *pt = dynamic_cast<Text*>(pb);
+
+if (pt) {
+  cout << pt->getTopic();
+} else {
+  cout << "Not a Text";
+}
+```
+
+Also works with references:
+```cpp
+Text { ... };
+Book &b = t;
+Text &t2 = dynamic_cast<Text &>(b);
+```
+If the cast succeeds, `t2` refers to `t`. If not, raises `bad_cast`.
+
+Can also solve the polymorphic assignment problems.
+```cpp
+Text &Text::operator=(const Book * other) { // virtual
+  const Text &textother = dynamic_cast<const Text &>(other); // throws if other is not a text
+  if (this == &textother) return * this;
+  Book::operator=(other);
+  topic = textother.topic;
+  return this;
+}
+```
+
+*Note: `dynamic_cast`ing only works on classes that have at least one virtual method*
+
+## How Virtual Methods Work  <a name="vmethod"></a>
+```cpp
+class Vec {
+  int x, y;
+  void f();
+};
+
+class Vec2 {
+  int x, y;
+  virtual void f();
+};
+
+// what's the difference?
+Vec v{1, 2};
+Vec2 w{1, 2};
+
+// do they look the same in memory
+```
+
+For each class with at least one virtual method, the compiler creates a table of f'n pointers (the vtable)
+
+Thus, `w` has 8 extra bytes (pointer to the vtable).
